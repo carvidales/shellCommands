@@ -116,13 +116,18 @@ class ScriptRunnerTest < ActiveSupport::TestCase
 
   test "a running script does not hold the executor open" do
     baseline = OpenWraps.count # the test itself runs inside an executor wrap
-    script = Script.create!(name: "slow", code: "echo started; sleep 1")
+    script = Script.create!(name: "slow", code: "echo started; sleep 4")
     run = ScriptRunner.start(script)
     Timeout.timeout(5) { sleep 0.05 until run.reload.log.include?("started") }
-    sleep 0.1
 
+    # Writing the first line takes a moment; after that the script is just
+    # sleeping and nothing should be held open.
+    deadline = Time.current + 2
+    sleep 0.05 until OpenWraps.count == baseline || Time.current > deadline
     assert_equal baseline, OpenWraps.count
+    assert run.reload.running?, "the script should still be running"
 
+    ScriptRunner.stop(run)
     ScriptRunner.wait(run)
   end
 
