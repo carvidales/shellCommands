@@ -1,0 +1,14 @@
+<% content_for :title, "My scripts" %>
+
+<div class="page-header">
+  <h1>My scripts</h1>
+  <%= link_to "+ New script", new_script_path, class: "button" %>
+</div>
+
+<% if @scripts.empty? %>
+  <p class="muted">No scripts yet. Create one, or drop a <code>.sh</code> file into the <code>scripts/</code> folder.</p>
+<% else %>
+  <div class="grid">
+    <%= render partial: "card", collection: @scripts, as: :script %>
+  </div>
+<% end %>

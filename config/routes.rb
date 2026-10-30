@@ -1,4 +1,10 @@
 Rails.application.routes.draw do
+  root "scripts#index"
+
+  resources :scripts do
+    post :run, on: :member
+  end
+
   resources :runs, only: :show do
     post :stop, on: :member
   end

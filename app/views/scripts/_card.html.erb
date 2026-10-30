@@ -1,0 +1,16 @@
+<div class="card">
+  <div class="card-title"><%= script.name %></div>
+  <div class="card-meta">
+    <% if script.file_missing? %>
+      <span class="badge badge-missing">file missing</span>
+    <% elsif (run = script.runs.first) %>
+      last: <%= link_to "#{run_status_icon(run)} #{l(run.started_at, format: :short)}", run_path(run) %>
+    <% else %>
+      never run
+    <% end %>
+  </div>
+  <div class="card-actions">
+    <%= button_to "▶ Run", run_script_path(script), class: "button button-run", form_class: "inline-form", disabled: script.file_missing? %>
+    <%= link_to "Edit", edit_script_path(script), class: "button button-secondary" %>
+  </div>
+</div>

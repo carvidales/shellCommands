@@ -1,0 +1,42 @@
+<% content_for :title, @script.name_was %>
+
+<p><%= link_to "← My scripts", root_path %></p>
+
+<div class="page-header">
+  <h1><%= @script.name_was %></h1>
+  <div class="actions">
+    <%= button_to "▶ Run", run_script_path(@script), class: "button button-run", form_class: "inline-form", disabled: @script.file_missing? %>
+    <% running = @script.running? %>
+    <%= button_to "Delete", script_path(@script), method: :delete, class: "button button-danger", form_class: "inline-form",
+          disabled: running, title: (running ? "Can't delete a running script" : nil),
+          data: { turbo_confirm: "Delete #{@script.name_was} and all its runs?" } %>
+  </div>
+</div>
+
+<% if @script.file_missing? %>
+  <p class="flash flash-alert">scripts/<%= @script.name_was %>.sh is missing. Saving will recreate it.</p>
+<% end %>
+
+<%= render "form", script: @script %>
+
+<h2>Past runs</h2>
+<% runs = @script.runs %>
+<% if runs.empty? %>
+  <p class="muted">This script hasn't been run yet.</p>
+<% else %>
+  <table class="past-runs">
+    <thead>
+      <tr><th>Status</th><th>Started</th><th>Duration</th><th>Exit code</th></tr>
+    </thead>
+    <tbody>
+      <% runs.each do |run| %>
+        <tr>
+          <td><%= link_to "#{run_status_icon(run)} #{run.status}", run_path(run) %></td>
+          <td><%= link_to l(run.started_at, format: :long), run_path(run) %></td>
+          <td><%= format_duration(run.duration) %></td>
+          <td><%= run.exit_code.nil? ? "—" : run.exit_code %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

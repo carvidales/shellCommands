@@ -1,0 +1,22 @@
+<%= form_with model: script, class: "script-form" do |form| %>
+  <% if script.errors.any? %>
+    <div class="errors">
+      <% script.errors.full_messages.each do |message| %>
+        <p><%= message %></p>
+      <% end %>
+    </div>
+  <% end %>
+
+  <div class="field">
+    <%= form.label :name %>
+    <%= form.text_field :name, placeholder: "deploy", autocomplete: "off" %>
+    <small class="muted">Saved as scripts/&lt;name&gt;.sh. Letters, numbers, - and _ only.</small>
+  </div>
+
+  <div class="field">
+    <%= form.label :code %>
+    <%= form.text_area :code, rows: 18, spellcheck: false, class: "code-editor", data: { controller: "tab-textarea" } %>
+  </div>
+
+  <%= form.submit "Save", class: "button" %>
+<% end %>
