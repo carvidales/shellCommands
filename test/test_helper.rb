@@ -2,6 +2,7 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 require "tmpdir"
+require "turbo/broadcastable/test_helper"
 
 module ActiveSupport
   class TestCase
@@ -10,6 +11,9 @@ module ActiveSupport
 
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all
+
+    # Turbo only mixes this in when Action Cable happens to load first.
+    include Turbo::Broadcastable::TestHelper
 
     # Point scripts and their working folder at throwaway dirs so tests never
     # touch the real scripts/ folder or the user's home.
