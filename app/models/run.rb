@@ -15,9 +15,13 @@ class Run < ApplicationRecord
   end
 
   # Concatenates in SQL so concurrent appends never overwrite each other.
+  # Each broadcast chunk carries its character range in the log so the run
+  # page can drop chunks it already has and notice ones it missed.
   def append_log!(chunk)
     self.class.where(id: id).update_all([ "log = log || ?", chunk ])
-    broadcast_append_to self, target: "run_#{id}_log", html: ERB::Util.html_escape(chunk)
+    log_end = self.class.where(id: id).pick(Arel.sql("length(log)"))
+    span = ApplicationController.helpers.tag.span(chunk, data: { start: log_end - chunk.length, end: log_end })
+    broadcast_append_to self, target: "run_#{id}_log", html: span
   end
 
   def finish!(status:, exit_code: nil, note: nil)

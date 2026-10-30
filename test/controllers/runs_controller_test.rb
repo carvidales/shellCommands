@@ -66,4 +66,26 @@ class RunsControllerTest < ActionDispatch::IntegrationTest
     ScriptRunner.wait(run, timeout: 8)
     assert_equal "stopped", run.reload.status
   end
+
+  test "show.json returns the log, its length, and the status html" do
+    script = Script.create!(name: "hello", code: "echo hi")
+    run = script.runs.create!(status: "succeeded", exit_code: 0, started_at: 1.second.ago, finished_at: Time.current,
+      code_snapshot: "echo hi", log: "héllo\n")
+
+    get run_path(run, format: :json)
+
+    body = response.parsed_body
+    assert_equal "héllo\n", body["log"]
+    assert_equal 6, body["length"]
+    assert_includes body["status_html"], "run_#{run.id}_status"
+  end
+
+  test "show renders the log length for the live view" do
+    script = Script.create!(name: "hello", code: "echo hi")
+    run = script.runs.create!(started_at: Time.current, code_snapshot: "echo hi", log: "héllo\n")
+
+    get run_path(run)
+
+    assert_select "[data-controller~='run-log'][data-run-log-length-value='6'][data-run-log-url-value='#{run_path(run, format: :json)}']"
+  end
 end

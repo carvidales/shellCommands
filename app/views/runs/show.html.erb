@@ -10,9 +10,13 @@
 </div>
 <p class="muted">Started <%= l(@run.started_at, format: :long) %></p>
 
-<%= render "runs/status", run: @run %>
+<div data-controller="run-log"
+     data-run-log-length-value="<%= @run.log.length %>"
+     data-run-log-url-value="<%= run_path(@run, format: :json) %>">
+  <%= render "runs/status", run: @run %>
 
-<pre id="run_<%= @run.id %>_log" class="console" data-controller="autoscroll"><%= @run.log %></pre>
+  <pre id="run_<%= @run.id %>_log" class="console" data-controller="autoscroll" data-run-log-target="log"><%= @run.log %></pre>
+</div>
 
 <details class="code-snapshot">
   <summary>Code that ran</summary>

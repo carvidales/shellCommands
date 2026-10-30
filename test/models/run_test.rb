@@ -60,4 +60,14 @@ class RunTest < ActiveSupport::TestCase
     @run.finish!(status: "succeeded", exit_code: 0)
     assert_difference("Run.count", -1) { @script.destroy! }
   end
+
+  test "append_log! broadcasts each chunk with its position in the log" do
+    @run.append_log!("héllo ")
+    broadcasts = capture_turbo_stream_broadcasts(@run) { @run.append_log!("wörld") }
+
+    span = Nokogiri::HTML5.fragment(broadcasts.first.at_css("template").inner_html).at_css("span")
+    assert_equal "6", span["data-start"]
+    assert_equal "11", span["data-end"]
+    assert_equal "wörld", span.text
+  end
 end
