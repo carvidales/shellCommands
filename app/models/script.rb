@@ -13,7 +13,10 @@ class Script < ApplicationRecord
   after_save :write_file
   after_destroy_commit :delete_file
 
-  attr_writer :code
+  # Browsers submit textareas with CRLF line endings, which break bash.
+  def code=(value)
+    @code = value&.gsub("\r\n", "\n")
+  end
 
   def self.directory = Rails.configuration.x.scripts_dir
 
@@ -64,8 +67,18 @@ class Script < ApplicationRecord
       old_path = self.class.path_for(name_before_last_save)
       File.rename(old_path, path) if File.exist?(old_path)
     end
-    File.write(path, @code) unless @code.nil?
+    write_atomically(@code) unless @code.nil?
     File.chmod(0o755, path) if File.exist?(path)
+  end
+
+  # bash reads a script as it runs, so swap in a new file rather than
+  # rewriting the one a running script may be reading.
+  def write_atomically(content)
+    temp_path = self.class.directory.join(".#{name}.sh.#{SecureRandom.hex(4)}.tmp")
+    File.write(temp_path, content)
+    File.rename(temp_path, path)
+  ensure
+    FileUtils.rm_f(temp_path) if temp_path
   end
 
   def delete_file

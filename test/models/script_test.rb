@@ -79,4 +79,19 @@ class ScriptTest < ActiveSupport::TestCase
     assert_not Script.new(name: "x", code: "echo app\n").save
     assert_equal "echo mine\n", File.read(scripts_dir.join("x.sh"))
   end
+
+  test "CRLF from browser textareas is normalized to LF" do
+    script = Script.create!(name: "crlf", code: "if true; then\r\n  echo ok\r\nfi\r\n")
+    assert_equal "if true; then\n  echo ok\nfi\n", File.binread(script.path)
+  end
+
+  test "saving replaces the file instead of rewriting it in place" do
+    script = Script.create!(name: "swap", code: "echo old\n")
+    File.open(script.path) do |running_copy|
+      script.update!(code: "echo new\n")
+      assert_equal "echo old\n", running_copy.read
+    end
+    assert_equal "echo new\n", File.read(script.path)
+    assert_equal 0o755, File.stat(script.path).mode & 0o777
+  end
 end

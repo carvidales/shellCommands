@@ -83,4 +83,9 @@ class ScriptsControllerTest < ActionDispatch::IntegrationTest
     get script_path(script)
     assert_redirected_to edit_script_path(script)
   end
+
+  test "create normalizes CRLF line endings" do
+    post scripts_path, params: { script: { name: "crlf", code: "echo a\r\necho b\r\n" } }
+    assert_equal "echo a\necho b\n", File.binread(Script.find_by!(name: "crlf").path)
+  end
 end
