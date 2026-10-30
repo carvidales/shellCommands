@@ -1,1 +1,31 @@
+# Ignore bundler config.
+/.bundle
+
+# Ignore all environment files.
+/.env*
+
+# Ignore all logfiles and tempfiles.
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+
+# Ignore pidfiles, but keep the directory.
+/tmp/pids/*
+!/tmp/pids/.keep
+
+# SQLite databases.
+/storage/*
+!/storage/.keep
+/db/*.sqlite3*
+
+/public/assets
+
+# Ignore key files for decrypting credentials and more.
+/config/*.key
+
+# User scripts stay private on this machine.
+/scripts/
+
+# Brainstorm mockups and plan workspace.
 /.superpowers/
