@@ -34,6 +34,13 @@ class ScriptsController < ApplicationController
     end
   end
 
+  def run
+    run = ScriptRunner.start(@script)
+    redirect_to run_path(run)
+  rescue ScriptRunner::Error => error
+    redirect_to edit_script_path(@script), alert: error.message
+  end
+
   def destroy
     if @script.destroy
       redirect_to root_path, notice: "Deleted #{@script.name}."

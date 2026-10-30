@@ -110,3 +110,6 @@ code { font-family: var(--mono); }
   word-break: break-all;
   margin: 0;
 }
+
+.code-snapshot { margin-top: 16px; }
+.code-snapshot pre { white-space: pre-wrap; margin: 8px 0 0; }

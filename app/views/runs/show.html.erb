@@ -1,0 +1,20 @@
+<% content_for :title, "#{@run.script.name} run" %>
+<%= turbo_stream_from @run %>
+
+<p><%= link_to "← My scripts", root_path %> · <%= link_to "Edit #{@run.script.name}", edit_script_path(@run.script) %></p>
+
+<div class="page-header">
+  <h1><%= @run.script.name %></h1>
+  <%= button_to "▶ Run again", run_script_path(@run.script), class: "button button-run", form_class: "inline-form",
+        disabled: @run.script.file_missing? %>
+</div>
+<p class="muted">Started <%= l(@run.started_at, format: :long) %></p>
+
+<%= render "runs/status", run: @run %>
+
+<pre id="run_<%= @run.id %>_log" class="console" data-controller="autoscroll"><%= @run.log %></pre>
+
+<details class="code-snapshot">
+  <summary>Code that ran</summary>
+  <pre class="code-editor"><%= @run.code_snapshot %></pre>
+</details>
