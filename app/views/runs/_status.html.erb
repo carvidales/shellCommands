@@ -1,0 +1,10 @@
+<div id="run_<%= run.id %>_status" class="run-status run-status-<%= run.status %>">
+  <span class="badge"><%= run_status_icon(run) %> <%= run.status.capitalize %></span>
+  <% unless run.running? %>
+    <span>exit code <%= run.exit_code.nil? ? "—" : run.exit_code %></span>
+    <span><%= format_duration(run.duration) %></span>
+  <% end %>
+  <% if run.running? %>
+    <%= button_to "Stop", stop_run_path(run), class: "button button-danger", form_class: "inline-form" %>
+  <% end %>
+</div>

@@ -10,11 +10,27 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_174038) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_174332) do
+  create_table "runs", force: :cascade do |t|
+    t.integer "script_id", null: false
+    t.string "status", default: "running", null: false
+    t.integer "exit_code"
+    t.datetime "started_at", null: false
+    t.datetime "finished_at"
+    t.text "log", default: "", null: false
+    t.integer "pid"
+    t.text "code_snapshot", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["script_id"], name: "index_runs_on_script_id"
+  end
+
   create_table "scripts", force: :cascade do |t|
     t.string "name", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["name"], name: "index_scripts_on_name", unique: true
   end
+
+  add_foreign_key "runs", "scripts"
 end

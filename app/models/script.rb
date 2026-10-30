@@ -3,10 +3,13 @@
 class Script < ApplicationRecord
   NAME_FORMAT = /\A[a-zA-Z0-9_-]+\z/
 
+  has_many :runs, -> { order(started_at: :desc) }, dependent: :destroy
+
   validates :name, presence: true, uniqueness: true,
     format: { with: NAME_FORMAT, message: "can only contain letters, numbers, - and _" }
   validate :target_file_is_free, if: :writing_new_path?
 
+  before_destroy :ensure_not_running, prepend: true
   after_save :write_file
   after_destroy_commit :delete_file
 
@@ -29,6 +32,10 @@ class Script < ApplicationRecord
     @code ||= file_missing? ? "" : File.read(path)
   end
 
+  def running? = runs.where(status: "running").exists?
+
+  def last_run = runs.first
+
   def file_missing?
     !File.exist?(path)
   end
@@ -43,6 +50,12 @@ class Script < ApplicationRecord
 
   def target_file_is_free
     errors.add(:name, "is already used by a file in the scripts folder") if File.exist?(path)
+  end
+
+  def ensure_not_running
+    return unless running?
+    errors.add(:base, "Can't delete a running script")
+    throw :abort
   end
 
   def write_file
