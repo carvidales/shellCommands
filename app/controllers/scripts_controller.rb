@@ -44,7 +44,7 @@ class ScriptsController < ApplicationController
   def run
     definitions = @script.parameters
     args = definitions.empty? ? [] : @script.arguments_for(params[:arguments])
-    run = ScriptRunner.start(@script, args: args)
+    run = definitions.empty? ? ScriptRunner.start(@script) : ScriptRunner.start(@script, args: args)
     redirect_to run_path(run)
   rescue ScriptRunner::Error, Script::ParameterError => error
     redirect_to edit_script_path(@script), alert: error.message
