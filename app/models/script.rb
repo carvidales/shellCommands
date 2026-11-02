@@ -7,15 +7,44 @@ class Script < ApplicationRecord
   MAX_ARGUMENT_BYTES = 1024
   class ParameterError < StandardError; end
 
+  MAX_ICON_BYTES = 1.megabyte
+  attr_accessor :remove_icon
+
+  def icon_path = Rails.root.join("storage", "script_icons", "#{id}.image")
+
+  def icon? = persisted? && File.file?(icon_path)
+
+  def icon_file=(file)
+    @icon_bytes = nil
+    @icon_error = nil
+    return if file.blank?
+
+    @icon_bytes = file.read(MAX_ICON_BYTES + 1)
+    @icon_error = "must be a PNG, JPEG, or WebP image under 1 MB" unless @icon_bytes.bytesize <= MAX_ICON_BYTES && self.class.icon_content_type(@icon_bytes)
+  rescue IOError, SystemCallError
+    @icon_error = "could not be read"
+  end
+
+  def self.icon_content_type(bytes)
+    return "image/png" if bytes.start_with?("\x89PNG\r\n\x1a\n".b)
+    return "image/jpeg" if bytes.start_with?("\xff\xd8\xff".b)
+    return "image/webp" if bytes.start_with?("RIFF".b) && bytes.byteslice(8, 4) == "WEBP"
+
+    nil
+  end
+
   has_many :runs, -> { order(started_at: :desc) }, dependent: :destroy
 
   validates :name, presence: true, uniqueness: true,
     format: { with: NAME_FORMAT, message: "can only contain letters, numbers, - and _" }
   validate :target_file_is_free, if: :writing_new_path?
+  validate :icon_upload_is_valid
 
   before_destroy :ensure_not_running, prepend: true
   after_save :write_file
+  after_save :save_icon
   after_destroy_commit :delete_file
+  after_destroy_commit :delete_icon
 
   # Browsers submit textareas with CRLF line endings, which break bash.
   def code=(value)
@@ -73,6 +102,31 @@ class Script < ApplicationRecord
   end
 
   private
+
+  def icon_upload_is_valid
+    errors.add(:icon_file, @icon_error) if @icon_error
+  end
+
+  def save_icon
+    if @icon_bytes
+      FileUtils.mkdir_p(icon_path.dirname)
+      temp_path = icon_path.dirname.join(".#{id}.#{SecureRandom.hex(4)}.tmp")
+      begin
+        File.binwrite(temp_path, @icon_bytes)
+        File.rename(temp_path, icon_path)
+      ensure
+        FileUtils.rm_f(temp_path)
+      end
+    elsif ActiveModel::Type::Boolean.new.cast(remove_icon)
+      delete_icon
+    end
+    @icon_bytes = nil
+    self.remove_icon = nil
+  end
+
+  def delete_icon
+    FileUtils.rm_f(icon_path) if id
+  end
 
   # Only creating or renaming a script from the app writes a new file; refuse
   # to clobber an untracked file that happens to sit at the target path.
