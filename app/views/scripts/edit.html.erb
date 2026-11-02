@@ -5,7 +5,11 @@
 <div class="page-header">
   <h1><%= @script.name_was %></h1>
   <div class="actions">
-    <%= button_to "▶ Run", run_script_path(@script), class: "button button-run", form_class: "inline-form", disabled: @script.file_missing? %>
+    <% if @script.parameters.any? %>
+      <%= link_to "▶ Run", parameters_script_path(@script), class: "button button-run" %>
+    <% else %>
+      <%= button_to "▶ Run", run_script_path(@script), class: "button button-run", form_class: "inline-form", disabled: @script.file_missing? %>
+    <% end %>
     <% running = @script.running? %>
     <%= button_to "Delete", script_path(@script), method: :delete, class: "button button-danger", form_class: "inline-form",
           disabled: running, title: (running ? "Can't delete a running script" : nil),
