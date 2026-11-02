@@ -1,0 +1,35 @@
+name: Rails CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rails-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rails-ci:
+    name: Rails checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RAILS_ENV: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby and cache gems
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Run the project's CI suite
+        run: bin/ci
