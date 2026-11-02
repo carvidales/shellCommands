@@ -4,6 +4,7 @@ Rails.application.routes.draw do
   resources :scripts do
     post :run, on: :member
     get :parameters, on: :member
+    get :icon, on: :member
   end
 
   resources :runs, only: :show do
