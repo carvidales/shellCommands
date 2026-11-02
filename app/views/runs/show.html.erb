@@ -5,8 +5,12 @@
 
 <div class="page-header">
   <h1><%= @run.script.name %></h1>
-  <%= button_to "▶ Run again", run_script_path(@run.script), class: "button button-run", form_class: "inline-form",
-        disabled: @run.script.file_missing? %>
+  <% if @run.script.parameters.any? && !@run.script.file_missing? %>
+    <%= link_to "▶ Run again", parameters_script_path(@run.script), class: "button button-run" %>
+  <% else %>
+    <%= button_to "▶ Run again", run_script_path(@run.script), class: "button button-run", form_class: "inline-form",
+          disabled: @run.script.file_missing? %>
+  <% end %>
 </div>
 <p class="muted">Started <%= l(@run.started_at, format: :long) %></p>
 
