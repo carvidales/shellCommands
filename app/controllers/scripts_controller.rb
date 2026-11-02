@@ -26,6 +26,17 @@ class ScriptsController < ApplicationController
   def edit
   end
 
+  def icon
+    return head :not_found unless @script.icon?
+
+    bytes = File.binread(@script.icon_path)
+    type = Script.icon_content_type(bytes)
+    return head :not_found unless type
+
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    send_data bytes, type: type, disposition: "inline"
+  end
+
   def update
     if @script.update(script_params)
       redirect_to edit_script_path(@script), notice: "Script saved."
@@ -65,6 +76,6 @@ class ScriptsController < ApplicationController
   end
 
   def script_params
-    params.expect(script: %i[name code])
+    params.expect(script: %i[name code icon_file remove_icon])
   end
 end

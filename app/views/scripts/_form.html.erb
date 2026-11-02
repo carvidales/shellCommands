@@ -14,6 +14,16 @@
   </div>
 
   <div class="field">
+    <%= form.label :icon_file, "Script icon (optional)" %>
+    <% if script.icon? %>
+      <%= image_tag icon_script_path(script), class: "script-icon", alt: "", width: 40, height: 40 %>
+      <label><%= form.check_box :remove_icon %> Remove current icon</label>
+    <% end %>
+    <%= form.file_field :icon_file, accept: "image/png,image/jpeg,image/webp" %>
+    <small class="muted">PNG, JPEG, or WebP; maximum 1 MB. Uploading replaces the current icon.</small>
+  </div>
+
+  <div class="field">
     <%= form.label :code %>
     <%= form.text_area :code, rows: 18, spellcheck: false, class: "code-editor", data: { controller: "tab-textarea" } %>
   </div>

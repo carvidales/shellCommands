@@ -88,6 +88,7 @@ class RunsControllerTest < ActionDispatch::IntegrationTest
 
     assert_select "[data-controller~='run-log'][data-run-log-length-value='6'][data-run-log-url-value='#{run_path(run, format: :json)}']"
   end
+
   test "run again links to parameter form for parameterized scripts" do
     script = Script.create!(name: "params", code: "# @param PORT=3000\necho \"$1\"\n")
     run = script.runs.create!(status: "succeeded", started_at: 1.second.ago,
@@ -110,5 +111,4 @@ class RunsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "form[action='#{run_script_path(script)}']", count: 1
   end
-
 end

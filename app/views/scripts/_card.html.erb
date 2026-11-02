@@ -1,5 +1,10 @@
 <div class="card">
-  <div class="card-title"><%= script.name %></div>
+  <div class="card-heading">
+    <% if script.icon? %>
+      <%= image_tag icon_script_path(script), class: "script-icon", alt: "", width: 40, height: 40, loading: "lazy" %>
+    <% end %>
+    <div class="card-title"><%= script.name %></div>
+  </div>
   <div class="card-meta">
     <% if script.file_missing? %>
       <span class="badge badge-missing">file missing</span>
