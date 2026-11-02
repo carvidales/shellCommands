@@ -164,12 +164,44 @@ class ScriptRunnerTest < ActiveSupport::TestCase
     orphan = Process.spawn("sleep", "30", pgroup: true)
     Process.detach(orphan)
     script = Script.create!(name: "orphan2", code: "sleep 30")
-    run = script.runs.create!(started_at: Time.current, code_snapshot: "x", pid: orphan, server_pid: dead_pid)
+    run = script.runs.create!(started_at: Time.current, code_snapshot: "x", pid: orphan, server_pid: dead_pid,
+      process_start_token: ScriptRunner.send(:process_start_token, orphan))
 
     ScriptRunner.recover_orphans!
 
     assert_equal "failed", run.reload.status
     Timeout.timeout(5) { sleep 0.05 while alive?(orphan) }
+  end
+
+  test "stop is idempotent" do
+    script = Script.create!(name: "idempotent", code: "sleep 30")
+    run = ScriptRunner.start(script)
+    assert ScriptRunner.stop(run)
+    assert_not ScriptRunner.stop(run)
+    ScriptRunner.wait(run, timeout: 8)
+    assert_equal "stopped", run.reload.status
+  end
+
+  test "does not leak Rails environment secrets to scripts" do
+    ENV["SECRET_FOR_RUNNER_TEST"] = "private"
+    run = run_script('echo "SECRET=${SECRET_FOR_RUNNER_TEST:-none}"')
+    assert_includes run.log, "SECRET=none"
+  ensure
+    ENV.delete("SECRET_FOR_RUNNER_TEST")
+  end
+
+  test "orphan recovery never signals unverifiable PIDs" do
+    script = Script.create!(name: "unknown", code: "echo hi")
+    run = script.runs.create!(started_at: Time.current, code_snapshot: "x", pid: Process.pid)
+    ScriptRunner.recover_orphans!
+    assert_equal "failed", run.reload.status
+    assert_includes run.log, "Could not verify the old process identity"
+  end
+
+  test "process start token is stable for a running process" do
+    token = ScriptRunner.send(:process_start_token, Process.pid)
+    assert_equal token, ScriptRunner.send(:process_start_token, Process.pid)
+    assert token if File.directory?("/proc")
   end
 
   private
