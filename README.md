@@ -68,3 +68,12 @@ After the workflow has run at least once, visit **Settings → Branches** (or
 Creating a workflow alone does **not** prevent merging failed PRs. The
 branch rule is what enforces the check. This app has no configured deployment
 pipeline; no automatic deployment is performed by this workflow.
+
+## Script icons
+
+Optionally attach a small PNG, JPEG, or WebP image (up to 1 MB) using the
+script's **Edit** form. The image appears beside its name on the home page.
+You can replace or remove it from the same form. Icons live locally in
+`storage/script_icons/` (already gitignored), are not committed to Git, and
+are deleted when their script is deleted. No migration or external storage
+service is needed.
