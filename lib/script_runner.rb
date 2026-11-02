@@ -57,7 +57,7 @@ module ScriptRunner
   @mutex = Mutex.new
 
   class << self
-    def start(script)
+    def start(script, args: [])
       raise Error, "Script file is missing" if script.file_missing?
 
       run = script.runs.create!(status: "running", started_at: Time.current,
@@ -66,7 +66,7 @@ module ScriptRunner
       input = output = process = nil
       begin
         env = Bundler.unbundled_env.slice(*SCRIPT_ENV)
-        input, output, process = Open3.popen2e(env, "bash", "-l", script.path.to_s,
+        input, output, process = Open3.popen2e(env, "bash", "-l", script.path.to_s, *args,
           chdir: Rails.configuration.x.script_cwd, pgroup: true, unsetenv_others: true)
         input.close
         token = process_start_token(process.pid)
