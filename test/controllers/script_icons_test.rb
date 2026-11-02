@@ -5,7 +5,7 @@ class ScriptIconsTest < ActionDispatch::IntegrationTest
   PNG_BYTES = "\x89PNG\r\n\x1a\n".b + "small-test-image".b
 
   def upload(bytes, content_type: "image/png")
-    Tempfile.create(["test-icon", ".png"]) do |file|
+    Tempfile.create([ "test-icon", ".png" ]) do |file|
       file.binmode
       file.write(bytes)
       file.flush
@@ -77,7 +77,7 @@ class ScriptIconsTest < ActionDispatch::IntegrationTest
     upload(PNG_BYTES) do |file|
       patch script_path(script), params: { script: { name: script.name, code: script.code, icon_file: file } }
     end
-    ["<svg>unsafe</svg>", "x" * (Script::MAX_ICON_BYTES + 1)].each do |invalid|
+    [ "<svg>unsafe</svg>", "x" * (Script::MAX_ICON_BYTES + 1) ].each do |invalid|
       upload(invalid) do |file|
         patch script_path(script), params: { script: { name: script.name, code: script.code, icon_file: file } }
       end
