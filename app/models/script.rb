@@ -10,7 +10,7 @@ class Script < ApplicationRecord
   MAX_ICON_BYTES = 1.megabyte
   attr_accessor :remove_icon
 
-  def icon_path = Rails.root.join("storage", "script_icons", "#{id}.image")
+  def icon_path = self.class.directory.join(".icons", "#{id}.image")
 
   def icon? = persisted? && File.file?(icon_path)
 
