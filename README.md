@@ -34,3 +34,9 @@ bin/rails server          # http://localhost:3000
 bin/rails test
 bin/rubocop
 ```
+
+## Script parameters
+
+Scripts may declare ordered arguments using `# @param NAME=default` comments.
+Parameterized scripts show a small form before Run; normal scripts still run in one click.
+See [script parameter documentation](docs/script-parameters.md).

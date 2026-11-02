@@ -1,0 +1,16 @@
+<% content_for :title, "Run #{@script.name}" %>
+
+<p><%= link_to "← Back to script", edit_script_path(@script) %></p>
+<h1>Run <%= @script.name %></h1>
+<p class="muted">Choose values for this run. Arguments are passed to Bash as $1, $2, ... in the order declared in the script.</p>
+
+<%= form_with url: run_script_path(@script), method: :post, scope: :arguments, class: "script-form" do |form| %>
+  <% @definitions.each do |definition| %>
+    <div class="field">
+      <%= form.label definition[:name], definition[:name] %>
+      <%= form.text_field definition[:name], value: definition[:default], maxlength: Script::MAX_ARGUMENT_BYTES,
+            autocomplete: "off" %>
+    </div>
+  <% end %>
+  <%= form.submit "▶ Run script", class: "button button-run" %>
+<% end %>
