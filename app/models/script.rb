@@ -2,6 +2,10 @@
 # scripts/<name>.sh, which is the source of truth (see the design doc).
 class Script < ApplicationRecord
   NAME_FORMAT = /\A[a-zA-Z0-9_-]+\z/
+  PARAMETER_FORMAT = /\A# @param ([A-Za-z][A-Za-z0-9_]*)=([^\r\n]*)\z/
+  MAX_PARAMETERS = 10
+  MAX_ARGUMENT_BYTES = 1024
+  class ParameterError < StandardError; end
 
   has_many :runs, -> { order(started_at: :desc) }, dependent: :destroy
 
@@ -33,6 +37,31 @@ class Script < ApplicationRecord
 
   def code
     @code ||= file_missing? ? "" : File.read(path)
+  end
+
+  # Metadata is kept in the shell file rather than the database.
+  # Lines such as '# @param PORT=3000' define ordered $1, $2, ... arguments.
+  def parameters
+    definitions = code.lines.filter_map do |line|
+      match = PARAMETER_FORMAT.match(line.chomp)
+      { name: match[1], default: match[2] } if match
+    end
+    raise ParameterError, "Maximum #{MAX_PARAMETERS} parameters per script" if definitions.length > MAX_PARAMETERS
+    raise ParameterError, "Duplicate parameter names" if definitions.map { |param| param[:name] }.uniq.length != definitions.length
+    raise ParameterError, "Parameter defaults must be at most #{MAX_ARGUMENT_BYTES} bytes" if definitions.any? { |param| param[:default].bytesize > MAX_ARGUMENT_BYTES }
+    definitions
+  end
+
+  def arguments_for(values)
+    definitions = parameters
+    raise ParameterError, "Parameter values are required" unless values.respond_to?(:permit!) && values.respond_to?(:to_unsafe_h)
+    supplied = values.to_unsafe_h
+    raise ParameterError, "Unexpected parameter" unless (supplied.keys - definitions.map { |param| param[:name] }).empty?
+    definitions.map do |definition|
+      value = supplied.fetch(definition[:name], definition[:default])
+      raise ParameterError, "Invalid value for #{definition[:name]}" unless value.is_a?(String) && value.bytesize <= MAX_ARGUMENT_BYTES && !value.include?("\u0000")
+      value
+    end
   end
 
   def running? = runs.where(status: "running").exists?
