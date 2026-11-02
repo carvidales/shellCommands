@@ -74,6 +74,6 @@ pipeline; no automatic deployment is performed by this workflow.
 Optionally attach a small PNG, JPEG, or WebP image (up to 1 MB) using the
 script's **Edit** form. The image appears beside its name on the home page.
 You can replace or remove it from the same form. Icons live locally in
-`storage/script_icons/` (already gitignored), are not committed to Git, and
+`scripts/.icons/` (already gitignored), are not committed to Git, and
 are deleted when their script is deleted. No migration or external storage
 service is needed.
