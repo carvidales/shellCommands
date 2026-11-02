@@ -9,7 +9,7 @@
     <div class="field">
       <%= form.label definition[:name], definition[:name] %>
       <%= form.text_field definition[:name], value: definition[:default], maxlength: Script::MAX_ARGUMENT_BYTES,
-            autocomplete: "off", required: true %>
+            autocomplete: "off" %>
     </div>
   <% end %>
   <%= form.submit "▶ Run script", class: "button button-run" %>
