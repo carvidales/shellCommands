@@ -1,10 +1,17 @@
 <% content_for :title, "#{@run.script.name} run" %>
 <%= turbo_stream_from @run %>
 
-<p><%= link_to "← My scripts", root_path %> · <%= link_to "Edit #{@run.script.name}", edit_script_path(@run.script) %></p>
+<div class="actions">
+  <%= link_to "← My scripts", root_path, class: "breadcrumb" %>
+  <%= link_to "Edit script", edit_script_path(@run.script), class: "breadcrumb" %>
+</div>
 
 <div class="page-header">
-  <h1><%= @run.script.name %></h1>
+  <div>
+    <span class="eyebrow">Execution details</span>
+    <h1><%= @run.script.name %></h1>
+    <p class="page-subtitle">Started <%= l(@run.started_at, format: :long) %></p>
+  </div>
   <% if @run.script.execution_form? && !@run.script.file_missing? %>
     <%= link_to "▶ Run again", parameters_script_path(@run.script), class: "button button-run" %>
   <% else %>
@@ -12,7 +19,6 @@
           disabled: @run.script.file_missing? %>
   <% end %>
 </div>
-<p class="muted">Started <%= l(@run.started_at, format: :long) %></p>
 
 <div data-controller="run-log"
      data-run-log-length-value="<%= @run.log.length %>"
