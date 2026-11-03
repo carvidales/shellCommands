@@ -1,12 +1,21 @@
 <% content_for :title, "My scripts" %>
 
 <div class="page-header">
-  <h1>My scripts</h1>
+  <div>
+    <span class="eyebrow">Your workspace</span>
+    <h1>My scripts</h1>
+    <p class="page-subtitle">Run your local automations, all in one place.</p>
+  </div>
   <%= link_to "+ New script", new_script_path, class: "button" %>
 </div>
 
 <% if @scripts.empty? %>
-  <p class="muted">No scripts yet. Create one, or drop a <code>.sh</code> file into the <code>scripts/</code> folder.</p>
+  <div class="empty-state">
+    <div class="empty-state-symbol" aria-hidden="true">&gt;_</div>
+    <h2>Your first script starts here</h2>
+    <p>Create a script, or drop a <code>.sh</code> file into your <code>scripts/</code> folder.</p>
+    <%= link_to "+ Create a script", new_script_path, class: "button" %>
+  </div>
 <% else %>
   <div class="grid">
     <%= render partial: "card", collection: @scripts, as: :script %>

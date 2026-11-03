@@ -2,6 +2,8 @@
   <div class="card-heading">
     <% if script.icon? %>
       <%= image_tag icon_script_path(script), class: "script-icon", alt: "", width: 40, height: 40, loading: "lazy" %>
+    <% else %>
+      <span class="script-icon-placeholder" aria-hidden="true">&gt;_</span>
     <% end %>
     <div class="card-title"><%= script.name %></div>
   </div>

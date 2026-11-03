@@ -1,7 +1,13 @@
 <% content_for :title, "Run #{@script.name}" %>
 
-<p><%= link_to "← Back to script", edit_script_path(@script) %></p>
-<h1>Run <%= @script.name %></h1>
+<%= link_to "← Back to script", edit_script_path(@script), class: "breadcrumb" %>
+<div class="page-header">
+  <div>
+    <span class="eyebrow">Configure execution</span>
+    <h1>Run <%= @script.name %></h1>
+    <p class="page-subtitle">Review the values before starting this script.</p>
+  </div>
+</div>
 <% if @requires_confirmation %>
   <p class="flash flash-alert">Confirm execution of <strong><%= @script.name %></strong>.</p>
   <% if @description.present? %><p><%= @description %></p><% end %>
