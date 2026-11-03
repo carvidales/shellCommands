@@ -34,3 +34,11 @@ bash scripts/check-port.sh 8080 https://example.com
 The form currently supports text values only. The metadata defaults are
 literal strings and should not contain credentials. As with all scripts in
 this application, only use the service on localhost.
+
+## Confirmation metadata
+
+`# @confirm=true` requires a server-verified confirmation before execution.
+`# @description=...` supplies plain text on that screen. Confirmation works
+with or without parameters and also applies to **Run again**. Tokens expire
+after 15 minutes and become invalid if the code changes. Duplicate or malformed
+reserved metadata is rejected at execution; ordinary Bash comments are unaffected.

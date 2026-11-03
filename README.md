@@ -10,6 +10,7 @@ read the logs of past runs.
 ## Run it
 
 ```bash
+sudo apt-get install imagemagick  # decoder for optional icon uploads
 bin/setup --skip-server   # install gems, prepare the database
 bin/rails server          # http://localhost:3000
 ```
@@ -29,6 +30,9 @@ bin/rails server          # http://localhost:3000
   the exact code that ran. Deleting a script deletes its runs.
 
 ## Tests
+
+Use Node.js 18+ for the dependency-free live-log client regression test,
+which is invoked by the Minitest suite.
 
 ```bash
 bin/rails test
@@ -77,3 +81,50 @@ You can replace or remove it from the same form. Icons live locally in
 `scripts/.icons/` (already gitignored), are not committed to Git, and
 are deleted when their script is deleted. No migration or external storage
 service is needed.
+
+## Execution limits and confirmation
+
+Configuration can be set through environment variables before starting Rails:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `SCRIPT_TIMEOUT_SECONDS` | `600` | Maximum duration, including waiting for inherited output pipes |
+| `SCRIPT_MAX_LOG_BYTES` | `5242880` | Per-run captured output limit, including the truncation notice; minimum 1024 |
+| `SCRIPT_MAX_CONCURRENT_RUNS` | `8` | Maximum active runs in this server process |
+
+Timeouts send TERM to the process group, then KILL after five seconds, and
+finish as `failed`. Manual Stop finishes as `stopped`. Reasons remain visible
+even after logs are truncated. Output continues to be drained after truncation.
+The concurrency limit rejects extra launches with a failed history entry.
+
+Each execution uses the recorded code through a private, read-only, unlinked
+snapshot descriptor. Editing or deleting the source cannot change that run,
+and there is no named snapshot left after a crash. `$0` and `BASH_SOURCE` refer
+to `/proc/self/fd/3`, rather than the original script path. Arguments, working
+directory, and the restricted environment remain unchanged.
+
+Add metadata to request a confirmation screen, optionally with parameters:
+
+```bash
+# @confirm=true
+# @description=Stops processes listening on a specified port
+# @param PORT=8000
+```
+
+The server requires an expiring confirmation token tied to the exact code.
+Editing that code requires confirmation again. Run again uses the same flow.
+Confirmation prevents accidental clicks; arbitrary scripts still run with your
+user's privileges. Do not expose the app beyond localhost.
+
+Use one Rails server process. The registry and concurrency limit are local to
+that process. Normal background children are cleaned up when Bash exits;
+scripts that deliberately detach with `setsid` can escape process-group
+control. After an abrupt server death, startup verifies recorded Linux process
+identities before signaling orphan groups. Legacy/unverifiable identities are
+marked failed without signaling. Linux `/proc` is required for execution.
+
+Icon uploads require ImageMagick (`sudo apt-get install imagemagick` on
+Ubuntu/WSL). PNG, JPEG, and WebP content is fully decoded with memory, dimension,
+and time limits, irrespective of the browser's claimed MIME type. Existing
+icons remain readable without a decoder; new uploads fail validation if it is
+unavailable. Images over 4096 pixels in either dimension are rejected.

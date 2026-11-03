@@ -2,7 +2,7 @@ require "test_helper"
 require "tempfile"
 
 class ScriptIconsTest < ActionDispatch::IntegrationTest
-  PNG_BYTES = "\x89PNG\r\n\x1a\n".b + "small-test-image".b
+  PNG_BYTES = File.binread(Rails.root.join("examples/icons/check-port.png"))
 
   def upload(bytes, content_type: "image/png")
     Tempfile.create([ "test-icon", ".png" ]) do |file|
@@ -48,12 +48,12 @@ class ScriptIconsTest < ActionDispatch::IntegrationTest
     upload(PNG_BYTES) do |file|
       patch script_path(script), params: { script: { name: script.name, code: script.code, icon_file: file } }
     end
-    replacement = "\xff\xd8\xff".b + "small-jpeg-test".b
-    upload(replacement, content_type: "image/jpeg") do |file|
+    replacement = File.binread(Rails.root.join("examples/icons/kill-port.png"))
+    upload(replacement, content_type: "image/png") do |file|
       patch script_path(script), params: { script: { name: script.name, code: script.code, icon_file: file } }
     end
     get icon_script_path(script)
-    assert_equal "image/jpeg", response.media_type
+    assert_equal "image/png", response.media_type
     assert_equal replacement, response.body.b
   ensure
     script&.destroy!
@@ -77,7 +77,7 @@ class ScriptIconsTest < ActionDispatch::IntegrationTest
     upload(PNG_BYTES) do |file|
       patch script_path(script), params: { script: { name: script.name, code: script.code, icon_file: file } }
     end
-    [ "<svg>unsafe</svg>", "x" * (Script::MAX_ICON_BYTES + 1) ].each do |invalid|
+    [ "\x89PNG\r\n\x1a\nnot-an-image".b, "\xff\xd8\xfftruncated".b, "RIFF0000WEBPtruncated".b, "<svg>unsafe</svg>", "x" * (Script::MAX_ICON_BYTES + 1) ].each do |invalid|
       upload(invalid) do |file|
         patch script_path(script), params: { script: { name: script.name, code: script.code, icon_file: file } }
       end
@@ -97,5 +97,20 @@ class ScriptIconsTest < ActionDispatch::IntegrationTest
     delete script_path(script)
     assert_redirected_to root_path
     assert_not File.exist?(path)
+  end
+  test "real JPEG and WebP images decode regardless of uploaded filename or MIME" do
+    script = Script.create!(name: "decoded_icons", code: "echo hi")
+    %w[jpg webp].each do |extension|
+      bytes = File.binread(Rails.root.join("test/fixtures/files/icon.#{extension}"))
+      upload(bytes, content_type: "text/plain") do |file|
+        patch script_path(script), params: { script: { icon_file: file } }
+      end
+      assert_redirected_to edit_script_path(script)
+      get icon_script_path(script)
+      assert_equal(extension == "jpg" ? "image/jpeg" : "image/webp", response.media_type)
+      assert_equal bytes, response.body.b
+    end
+  ensure
+    script&.destroy!
   end
 end

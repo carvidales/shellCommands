@@ -5,7 +5,7 @@
 <div class="page-header">
   <h1><%= @script.name_was %></h1>
   <div class="actions">
-    <% if @script.parameters.any? %>
+    <% if @script.execution_form? %>
       <%= link_to "▶ Run", parameters_script_path(@script), class: "button button-run" %>
     <% else %>
       <%= button_to "▶ Run", run_script_path(@script), class: "button button-run", form_class: "inline-form", disabled: @script.file_missing? %>

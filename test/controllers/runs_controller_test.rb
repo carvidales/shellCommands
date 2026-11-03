@@ -111,4 +111,43 @@ class RunsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "form[action='#{run_script_path(script)}']", count: 1
   end
+  test "confirmation is enforced on direct POST and Run again" do
+    script = Script.create!(name: "danger", code: "# @confirm=true\n# @description=Stop something\n# @param PORT=3000\necho \"$1\"")
+    assert_no_difference("Run.count") { post run_script_path(script), params: { arguments: { PORT: "4000" } } }
+    assert_redirected_to parameters_script_path(script)
+    get parameters_script_path(script)
+    assert_response :success
+    assert_includes response.body, "Stop something"
+    token = css_select("input[name='confirmation_token']").first["value"]
+    post run_script_path(script), params: { confirmation_token: token, arguments: { PORT: "4000" } }
+    run = script.runs.last
+    ScriptRunner.wait(run)
+    assert_equal "4000\n", run.reload.log
+    get run_path(run)
+    assert_select "a[href='#{parameters_script_path(script)}']", text: /Run again/
+    script.update!(code: "# @confirm=true\necho changed")
+    assert_no_difference("Run.count") { post run_script_path(script), params: { confirmation_token: token } }
+  end
+
+  test "confirmation works without parameters and rejects forged tokens" do
+    script = Script.create!(name: "confirm_plain", code: "# @confirm=true\necho ok")
+    assert_no_difference("Run.count") { post run_script_path(script), params: { confirmation_token: "forged" } }
+    get parameters_script_path(script)
+    token = css_select("input[name='confirmation_token']").first["value"]
+    post run_script_path(script), params: { confirmation_token: token }
+    run = script.runs.last
+    ScriptRunner.wait(run)
+    assert_equal "ok\n", run.reload.log
+  end
+  test "confirmation expires and cannot authorize a different script" do
+    script = Script.create!(name: "expiring", code: "# @confirm=true\necho ok")
+    other = Script.create!(name: "other_confirmation", code: script.code)
+    get parameters_script_path(script)
+    token = css_select("input[name='confirmation_token']").first["value"]
+    assert_no_difference("Run.count") { post run_script_path(other), params: { confirmation_token: token } }
+    travel 16.minutes do
+      assert_no_difference("Run.count") { post run_script_path(script), params: { confirmation_token: token } }
+      assert_redirected_to parameters_script_path(script)
+    end
+  end
 end

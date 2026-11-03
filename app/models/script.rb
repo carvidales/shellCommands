@@ -20,7 +20,7 @@ class Script < ApplicationRecord
     return if file.blank?
 
     @icon_bytes = file.read(MAX_ICON_BYTES + 1)
-    @icon_error = "must be a PNG, JPEG, or WebP image under 1 MB" unless @icon_bytes.bytesize <= MAX_ICON_BYTES && self.class.icon_content_type(@icon_bytes)
+    @icon_error = "must be a PNG, JPEG, or WebP image under 1 MB" unless @icon_bytes.bytesize <= MAX_ICON_BYTES && self.class.icon_content_type(@icon_bytes) && decodable_icon?(@icon_bytes)
   rescue IOError, SystemCallError
     @icon_error = "could not be read"
   end
@@ -56,7 +56,7 @@ class Script < ApplicationRecord
   # Creates a record for every scripts/*.sh file that doesn't have one yet,
   # so scripts created outside the app show up as buttons.
   def self.sync_from_directory!
-    names = Dir.glob(directory.join("*.sh")).map { |file| File.basename(file, ".sh") }
+    names = Dir.glob(directory.join("*.sh")).select { |file| File.file?(file) }.map { |file| File.basename(file, ".sh") }
     (names.grep(NAME_FORMAT) - pluck(:name)).each { |name| create!(name: name) }
   end
 
@@ -73,12 +73,38 @@ class Script < ApplicationRecord
   def parameters
     definitions = code.lines.filter_map do |line|
       match = PARAMETER_FORMAT.match(line.chomp)
+      raise ParameterError, "Malformed parameter declaration" if line.match?(/\A# @param(?:\s|=|$)/) && !match
       { name: match[1], default: match[2] } if match
     end
     raise ParameterError, "Maximum #{MAX_PARAMETERS} parameters per script" if definitions.length > MAX_PARAMETERS
     raise ParameterError, "Duplicate parameter names" if definitions.map { |param| param[:name] }.uniq.length != definitions.length
-    raise ParameterError, "Parameter defaults must be at most #{MAX_ARGUMENT_BYTES} bytes" if definitions.any? { |param| param[:default].bytesize > MAX_ARGUMENT_BYTES }
+    raise ParameterError, "Parameter defaults must be at most #{MAX_ARGUMENT_BYTES} bytes" if definitions.any? { |param| param[:default].bytesize > MAX_ARGUMENT_BYTES || param[:default].include?("\u0000") }
     definitions
+  end
+
+  def confirmation_required?
+    metadata_value("confirm").tap do |value|
+      raise ParameterError, "Confirmation must be true or false" unless value.nil? || %w[true false].include?(value)
+    end == "true"
+  end
+
+  def description = metadata_value("description")
+
+  def execution_form?
+    confirmation_required? || parameters.any?
+  rescue ParameterError
+    true # The form endpoint reports malformed metadata without breaking listings.
+  end
+
+  def confirmation_identity = [ id, name, Digest::SHA256.hexdigest(code) ]
+
+  def metadata_value(key)
+    lines = code.lines.select { |line| line.match?(/\A# @#{key}(?:[=\s]|$)/) }
+    raise ParameterError, "Duplicate #{key} metadata" if lines.length > 1
+    return if lines.empty?
+    match = /\A# @#{key}=([^\r\n]*)\z/.match(lines.first.chomp)
+    raise ParameterError, "Malformed #{key} metadata" unless match
+    match[1]
   end
 
   def arguments_for(values)
@@ -102,6 +128,30 @@ class Script < ApplicationRecord
   end
 
   private
+
+  # Force a whitelisted decoder and decode all pixels, with bounded resources.
+  # Filename, browser MIME type, and header signatures alone are insufficient.
+  def decodable_icon?(bytes)
+    format = { "image/png" => "png", "image/jpeg" => "jpeg", "image/webp" => "webp" }.fetch(self.class.icon_content_type(bytes))
+    Tempfile.create([ "script-icon-", ".image" ]) do |file|
+      file.binmode
+      file.write(bytes)
+      file.flush
+      MiniMagick.convert do |command|
+        command.limit "memory", "32MiB"
+        command.limit "map", "32MiB"
+        command.limit "disk", "0"
+        command.limit "width", "4096"
+        command.limit "height", "4096"
+        command.limit "time", "5"
+        command << "#{format}:#{file.path}"
+        command << "null:"
+      end
+    end
+    true
+  rescue MiniMagick::Error, MiniMagick::TimeoutError
+    false
+  end
 
   def icon_upload_is_valid
     errors.add(:icon_file, @icon_error) if @icon_error
@@ -151,15 +201,20 @@ class Script < ApplicationRecord
       File.rename(old_path, path) if File.exist?(old_path)
     end
     write_atomically(@code) unless @code.nil?
-    File.chmod(0o755, path) if File.exist?(path)
+    File.chmod(0o755, path) if File.exist?(path) && !File.symlink?(path)
   end
 
   # bash reads a script as it runs, so swap in a new file rather than
   # rewriting the one a running script may be reading.
   def write_atomically(content)
-    temp_path = self.class.directory.join(".#{name}.sh.#{SecureRandom.hex(4)}.tmp")
-    File.write(temp_path, content)
-    File.rename(temp_path, path)
+    temp_path = nil
+    Tempfile.create([ ".script-", ".tmp" ], self.class.directory) do |file|
+      temp_path = file.path
+      file.write(content)
+      file.flush
+      file.chmod(0o755)
+      File.rename(temp_path, path)
+    end
   ensure
     FileUtils.rm_f(temp_path) if temp_path
   end

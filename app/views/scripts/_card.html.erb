@@ -15,7 +15,7 @@
     <% end %>
   </div>
   <div class="card-actions">
-    <% if script.parameters.any? && !script.file_missing? %>
+    <% if script.execution_form? && !script.file_missing? %>
       <%= link_to "▶ Run", parameters_script_path(script), class: "button button-run" %>
     <% else %>
       <%= button_to "▶ Run", run_script_path(script), class: "button button-run", form_class: "inline-form", disabled: script.file_missing? %>
