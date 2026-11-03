@@ -2,9 +2,14 @@
 
 <p><%= link_to "← Back to script", edit_script_path(@script) %></p>
 <h1>Run <%= @script.name %></h1>
+<% if @requires_confirmation %>
+  <p class="flash flash-alert">Confirm execution of <strong><%= @script.name %></strong>.</p>
+  <% if @description.present? %><p><%= @description %></p><% end %>
+<% end %>
 <p class="muted">Choose values for this run. Arguments are passed to Bash as $1, $2, ... in the order declared in the script.</p>
 
 <%= form_with url: run_script_path(@script), method: :post, scope: :arguments, class: "script-form" do |form| %>
+  <%= hidden_field_tag :confirmation_token, @confirmation_token if @requires_confirmation %>
   <% @definitions.each do |definition| %>
     <div class="field">
       <%= form.label definition[:name], definition[:name] %>
@@ -12,5 +17,5 @@
             autocomplete: "off" %>
     </div>
   <% end %>
-  <%= form.submit "▶ Run script", class: "button button-run" %>
+  <%= form.submit(@requires_confirmation ? "Confirm and run" : "▶ Run script", class: "button button-run") %>
 <% end %>

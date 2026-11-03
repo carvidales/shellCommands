@@ -47,12 +47,25 @@ class ScriptsController < ApplicationController
 
   def parameters
     @definitions = @script.parameters
-    redirect_to edit_script_path(@script) if @definitions.empty?
+    @requires_confirmation = @script.confirmation_required?
+    @description = @script.description
+    if @requires_confirmation
+      @confirmation_token = confirmation_verifier.generate(@script.confirmation_identity, expires_in: 15.minutes, purpose: "script-execution")
+    elsif @definitions.empty?
+      redirect_to edit_script_path(@script)
+    end
   rescue Script::ParameterError => error
     redirect_to edit_script_path(@script), alert: error.message
   end
 
   def run
+    @script.description # Validate reserved metadata even without confirmation.
+    if @script.confirmation_required?
+      identity = confirmation_verifier.verified(params[:confirmation_token], purpose: "script-execution")
+      unless identity == @script.confirmation_identity
+        return redirect_to parameters_script_path(@script), alert: "Confirm this script before running it."
+      end
+    end
     definitions = @script.parameters
     args = definitions.empty? ? [] : @script.arguments_for(params[:arguments])
     run = definitions.empty? ? ScriptRunner.start(@script) : ScriptRunner.start(@script, args: args)
@@ -70,6 +83,8 @@ class ScriptsController < ApplicationController
   end
 
   private
+
+  def confirmation_verifier = Rails.application.message_verifier("script-confirmation")
 
   def set_script
     @script = Script.find(params[:id])

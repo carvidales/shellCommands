@@ -130,6 +130,8 @@ GEM
       net-pop
       net-smtp
     marcel (1.2.1)
+    mini_magick (5.4.0)
+      logger
     mini_mime (1.1.5)
     minitest (6.0.6)
       drb (~> 2.0)
@@ -325,6 +327,7 @@ DEPENDENCIES
   bundler-audit
   debug
   importmap-rails
+  mini_magick (~> 5.4)
   propshaft
   puma (>= 5.0)
   rails (~> 8.1.4)

@@ -4,6 +4,7 @@
     <span>exit code <%= run.exit_code.nil? ? "—" : run.exit_code %></span>
     <span><%= format_duration(run.duration) %></span>
   <% end %>
+  <% if run.termination_note.present? %><span><%= run.termination_note %></span><% end %>
   <% if run.running? %>
     <%= button_to "Stop", stop_run_path(run), class: "button button-danger", form_class: "inline-form" %>
   <% end %>

@@ -1,4 +1,5 @@
 require "open3"
+require "tempfile"
 
 # Runs scripts in the background and owns their processes so they can be
 # stopped, and killed when the server exits.
@@ -63,24 +64,41 @@ module ScriptRunner
       run = script.runs.create!(status: "running", started_at: Time.current,
         code_snapshot: script.code, server_pid: Process.pid,
         server_start_token: process_start_token(Process.pid))
-      input = output = process = nil
+      input = output = process = snapshot = nil
       begin
+        snapshot = Tempfile.create([ "shell-command-", ".sh" ])
+        snapshot.write(run.code_snapshot)
+        snapshot.flush
+        snapshot.chmod(0o400)
+        writable_snapshot = snapshot
+        snapshot = File.open(writable_snapshot.path, "rb")
+        writable_snapshot.close
+        # Linux keeps the inode alive through the inherited descriptor. There
+        # is no pathname to leak even if the Rails server is SIGKILLed.
+        File.unlink(snapshot.path)
         env = Bundler.unbundled_env.slice(*SCRIPT_ENV)
-        input, output, process = Open3.popen2e(env, "bash", "-l", script.path.to_s, *args,
-          chdir: Rails.configuration.x.script_cwd, pgroup: true, unsetenv_others: true)
-        input.close
-        token = process_start_token(process.pid)
-        run.update_columns(pid: process.pid, process_start_token: token)
-
+        # Stop must not observe a spawned process before it is registered.
         @mutex.synchronize do
-          entry = { pid: process.pid, token: token, stop_requested: false }
-          @registry[run.id] = entry
-          entry[:thread] = Thread.new { stream(run.id, output, process) }
+          raise Error, "Maximum concurrent executions reached" if @registry.size >= Rails.configuration.x.max_concurrent_runs
+          input, output, process = Open3.popen2e(env, "bash", "-l", "-c",
+            'IFS= read -r ready || exit 125; exec "$BASH" "$@"', "shell-commands", "/proc/self/fd/3", *args,
+            chdir: Rails.configuration.x.script_cwd, pgroup: true, unsetenv_others: true, 3 => snapshot)
+          token = process_start_token(process.pid)
+          run.update_columns(pid: process.pid, process_start_token: token)
+          @registry[run.id] = { pid: process.pid, token: token, stop_requested: false,
+            deadline: monotonic + Rails.configuration.x.execution_timeout }
+          @registry[run.id][:thread] = Thread.new { stream(run.id, output, process, snapshot) }
+          # Keep the Bash leader alive until its identity and registry entry
+          # are known, including for scripts that immediately background work.
+          input.write("ready\n")
+          input.close
         end
       rescue StandardError => error
         # A child can start successfully before persisting its PID fails.
         signal_group("KILL", process.pid) if process
         process.value if process
+        snapshot.close if snapshot && !snapshot.closed?
+        File.unlink(snapshot.path) if snapshot && File.exist?(snapshot.path)
         input.close if input && !input.closed?
         output.close if output && !output.closed?
         @mutex.synchronize { @registry.delete(run.id) }
@@ -101,17 +119,7 @@ module ScriptRunner
         entry = @registry[run.id]
         return false unless entry && !entry[:stop_requested]
 
-        entry[:stop_requested] = true
-        signal_group("TERM", entry[:pid]) if owned_group?(entry[:pid], entry[:token])
-        entry[:stop_thread] = Thread.new do
-          sleep STOP_GRACE_PERIOD
-          @mutex.synchronize do
-            current = @registry[run.id]
-            if current.equal?(entry) && owned_group?(entry[:pid], entry[:token])
-              signal_group("KILL", entry[:pid])
-            end
-          end
-        end
+        request_stop(entry, :manual)
       end
       true
     end
@@ -169,10 +177,13 @@ module ScriptRunner
 
     def owned_group?(pid, token)
       return false unless pid && group_alive?(pid)
-      return process_start_token(pid) == token if token
-
-      # On macOS, fall back to checking that the group leader exists.
-      # Recovery never uses this fallback for persisted unknown processes.
+      if token
+        current = process_start_token(pid)
+        return current == token if current
+        # Linux reserves a PGID while members remain, even after its leader
+        # has been reaped. A new leader at this PID would have a new token.
+        return !File.exist?("/proc/#{pid}")
+      end
       Process.getpgid(pid) == pid
     rescue Errno::ESRCH, Errno::EPERM
       false
@@ -180,37 +191,78 @@ module ScriptRunner
 
     # Flush small chunks promptly, but batch noisy commands to avoid a database
     # update and Turbo broadcast for every 4 KB read.
-    def stream(run_id, output, process)
+    def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+    def request_stop(entry, reason)
+      return if entry[:stop_requested]
+      entry[:stop_requested] = reason
+      entry[:kill_at] = monotonic + STOP_GRACE_PERIOD
+      signal_group("TERM", entry[:pid]) if owned_group?(entry[:pid], entry[:token])
+    end
+
+    def stream(run_id, output, process, snapshot)
       chunker = Utf8Chunker.new
       buffer = +""
-      last_flush = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      last_flush = monotonic
+      eof = false
       begin
         loop do
-          if IO.select([ output ], nil, nil, LOG_FLUSH_INTERVAL)
+          if !eof && IO.select([ output ], nil, nil, LOG_FLUSH_INTERVAL)
             begin
               buffer << chunker.call(output.readpartial(CHUNK_SIZE))
             rescue EOFError
               buffer << chunker.flush
-              flush_log(run_id, buffer)
-              status = process.value
-              stopped = @mutex.synchronize { @registry.dig(run_id, :stop_requested) }
-              with_run(run_id) { |run| run.finish!(status: final_status(status, stopped), exit_code: status.exitstatus) }
-              break
+              eof = true
             end
+          elsif eof
+            sleep LOG_FLUSH_INTERVAL
           end
-          now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          if buffer.bytesize >= LOG_FLUSH_BYTES || now - last_flush >= LOG_FLUSH_INTERVAL
+          now = monotonic
+          if eof || buffer.bytesize >= LOG_FLUSH_BYTES || now - last_flush >= LOG_FLUSH_INTERVAL
             flush_log(run_id, buffer)
             last_flush = now
           end
+          completed = process.join(0)
+          reason, done, killed = @mutex.synchronize do
+            entry = @registry.fetch(run_id)
+            alive = owned_group?(entry[:pid], entry[:token])
+            if !entry[:stop_requested]
+              if now >= entry[:deadline] && (!completed || !eof)
+                request_stop(entry, :timeout)
+              elsif completed && alive
+                request_stop(entry, :children)
+              end
+            end
+            if entry[:kill_at] && now >= entry[:kill_at] && !entry[:killed]
+              signal_group("KILL", entry[:pid]) if alive
+              entry[:killed] = true
+            end
+            [ entry[:stop_requested], completed && (!alive || entry[:killed]), entry[:killed] ]
+          end
+          next unless done && (eof || killed)
+          unless eof
+            buffer << chunker.flush
+            flush_log(run_id, buffer)
+          end
+
+          status = process.value
+          note = case reason
+          when :timeout then "\n[runner] Execution timed out.\n"
+          when :manual then "\n[runner] Stopped by user.\n"
+          when :children then "\n[runner] Cleaned up background processes after Bash exited.\n"
+          end
+          with_run(run_id) do |run|
+            run.finish!(status: reason == :timeout ? "failed" : final_status(status, reason == :manual),
+              exit_code: status.exitstatus, note: note)
+          end
+          break
         end
       rescue StandardError => error
         abandon(run_id, process, error)
       ensure
         output.close unless output.closed?
-        escalation = @mutex.synchronize { @registry.dig(run_id, :stop_thread) }
-        # A Bash leader can exit while children still belong to its group.
-        escalation&.join if group_alive?(process.pid)
+        snapshot.close unless snapshot.closed?
+        File.unlink(snapshot.path) if File.exist?(snapshot.path)
         @mutex.synchronize { @registry.delete(run_id) }
       end
     end
@@ -225,12 +277,15 @@ module ScriptRunner
     # Something broke while streaming (DB, broadcast...). Kill the script and
     # record the failure without relying on the code path that just failed.
     def abandon(run_id, process, error)
-      signal_group("KILL", process.pid)
+      entry = @mutex.synchronize { @registry[run_id] }
+      signal_group("KILL", process.pid) if entry && owned_group?(entry[:pid], entry[:token])
       process.value
       Rails.application.executor.wrap do
         scope = Run.where(id: run_id)
-        scope.update_all([ "log = COALESCE(log, '') || ?", "\n[runner] #{error.class}: #{error.message}\n" ])
-        scope.update_all(status: "failed", finished_at: Time.current, pid: nil)
+        note = "\n[runner] #{error.class}: #{error.message}\n".truncate_bytes(4096)
+        limit = Rails.configuration.x.max_log_bytes
+        scope.update_all([ "log = CASE WHEN length(CAST(log AS BLOB)) + ? <= ? THEN log || ? ELSE log END", note.bytesize, limit, note ])
+        scope.update_all(status: "failed", finished_at: Time.current, pid: nil, termination_note: note)
         run = Run.find_by(id: run_id)
         run&.broadcast_replace_to(run, target: "run_#{run_id}_status",
           partial: "runs/status", locals: { run: run })
