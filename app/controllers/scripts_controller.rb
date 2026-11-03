@@ -91,6 +91,6 @@ class ScriptsController < ApplicationController
   end
 
   def script_params
-    params.expect(script: %i[name code icon_file remove_icon])
+    params.expect(script: %i[name code icon_file remove_icon description])
   end
 end

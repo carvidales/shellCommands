@@ -72,6 +72,15 @@ Creating a workflow alone does **not** prevent merging failed PRs. The
 branch rule is what enforces the check. This app has no configured deployment
 pipeline; no automatic deployment is performed by this workflow.
 
+## Script descriptions
+
+Use the optional **Description** field when creating or editing a script to
+show a brief explanation on its dashboard card. Descriptions can contain up to
+200 characters on one line; clear the field to remove one. They are stored as
+`# @description=...` comments in the script file, preserving the shebang and
+other metadata. Existing descriptions added directly to files also appear on
+cards and confirmation screens. No database migration is required.
+
 ## Script icons
 
 Optionally attach a small PNG, JPEG, or WebP image (up to 1 MB) using the

@@ -14,6 +14,13 @@
   </div>
 
   <div class="field">
+    <%= form.label :description, "Description (optional)" %>
+    <%= form.text_field :description, value: script.display_description, class: "description-input",
+          placeholder: "What does this script do?", maxlength: Script::MAX_DESCRIPTION_LENGTH %>
+    <small class="muted">A brief description shown on the dashboard. Maximum <%= Script::MAX_DESCRIPTION_LENGTH %> characters.</small>
+  </div>
+
+  <div class="field">
     <%= form.label :icon_file, "Script icon (optional)" %>
     <% if script.icon? %>
       <%= image_tag icon_script_path(script), class: "script-icon", alt: "", width: 40, height: 40 %>

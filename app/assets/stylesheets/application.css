@@ -69,6 +69,7 @@ code { font-family: var(--mono); }
 .card-heading { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .script-icon { width: 40px; height: 40px; flex: 0 0 40px; border: 1px solid var(--border); border-radius: 8px; object-fit: contain; background: #fff; }
 .card-title { font-weight: 600; font-size: 17px; word-break: break-all; }
+.card-description { color: var(--muted); font-size: 14px; line-height: 1.4; margin: 8px 0; overflow-wrap: anywhere; }
 .card-meta { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
 .card-actions { display: flex; gap: 8px; }
 
@@ -77,6 +78,7 @@ code { font-family: var(--mono); }
 
 .script-form .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
 .script-form input[type=text] { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font: inherit; max-width: 320px; }
+.script-form input.description-input { width: 100%; max-width: 640px; }
 .code-editor {
   font-family: var(--mono);
   font-size: 13px;
