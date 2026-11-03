@@ -204,6 +204,131 @@ class ScriptRunnerTest < ActiveSupport::TestCase
     assert token if File.directory?("/proc")
   end
 
+  test "executes the recorded snapshot even when source changes before spawn" do
+    script = Script.create!(name: "snapshot", code: 'printf "%s:%s" old "$1"')
+    original = Open3.method(:popen2e)
+    snapshot_path = nil
+    Open3.define_singleton_method(:popen2e) do |*args, **options|
+      snapshot_path = options.fetch(3).path
+      File.write(script.path, "echo changed")
+      assert_mode = options.fetch(3).stat.mode & 0o777
+      raise "insecure snapshot" unless assert_mode == 0o400
+      original.call(*args, **options)
+    end
+    run = ScriptRunner.start(script, args: [ "a;echo injected" ])
+    ScriptRunner.wait(run)
+    assert_equal 'printf "%s:%s" old "$1"', run.reload.code_snapshot
+    assert_equal "old:a;echo injected", run.log
+    assert_not File.exist?(snapshot_path)
+  ensure
+    Open3.define_singleton_method(:popen2e, original) if original
+  end
+
+  test "editing a source during execution cannot alter the running snapshot" do
+    script = Script.create!(name: "changing", code: "touch ready; while [ ! -f release ]; do sleep 0.02; done; echo original")
+    run = ScriptRunner.start(script)
+    await_file("ready")
+    File.write(script.path, "echo changed")
+    File.write(File.join(Rails.configuration.x.script_cwd, "release"), "")
+    ScriptRunner.wait(run)
+    assert_equal "original\n", run.reload.log
+  end
+
+  test "timeout terminates a TERM resistant group and records failure" do
+    old = Rails.configuration.x.execution_timeout
+    Rails.configuration.x.execution_timeout = 0.2
+    run = run_script("trap '' TERM; echo ready; while :; do sleep 1; done")
+    assert_equal "failed", run.status
+    assert_includes run.termination_note, "timed out"
+    assert_nil run.pid
+  ensure
+    Rails.configuration.x.execution_timeout = old
+  end
+
+  test "output is bounded and drained after truncation with valid UTF8" do
+    old = Rails.configuration.x.max_log_bytes
+    Rails.configuration.x.max_log_bytes = 1024
+    run = run_script("yes é | head -c 100000; echo done > drained")
+    assert_equal "succeeded", run.status
+    assert File.exist?(File.join(Rails.configuration.x.script_cwd, "drained"))
+    assert_operator run.log.bytesize, :<=, 1024
+    assert run.log.valid_encoding?
+    assert_equal 1, run.log.scan("Output truncated").length
+  ensure
+    Rails.configuration.x.max_log_bytes = old
+  end
+
+  test "background children are cleaned up even after the leader exits" do
+    run = run_script("sleep 30 > /dev/null 2>&1 & echo $! > background.pid")
+    assert_equal "succeeded", run.status
+    pid = File.read(File.join(Rails.configuration.x.script_cwd, "background.pid")).to_i
+    # A reparented zombie is dead but can remain visible until PID 1 reaps it.
+    stat = File.read("/proc/#{pid}/stat") if File.exist?("/proc/#{pid}/stat")
+    assert stat.nil? || stat.rpartition(") ").last.start_with?("Z "), stat
+  end
+
+  test "simultaneous runs of one script have independent output and stop state" do
+    script = Script.create!(name: "parallel", code: 'echo "$1"; sleep 30')
+    first = ScriptRunner.start(script, args: [ "one" ])
+    second = ScriptRunner.start(script, args: [ "two" ])
+    Timeout.timeout(5) { sleep 0.02 until first.reload.log.include?("one") && second.reload.log.include?("two") }
+    ScriptRunner.stop(first)
+    ScriptRunner.wait(first)
+    assert_equal "stopped", first.reload.status
+    assert second.reload.running?
+    ScriptRunner.stop(second)
+    ScriptRunner.wait(second)
+    assert_equal "two\n", second.reload.log.lines.first
+  end
+
+  test "spawn failure cleans up the snapshot and records failure" do
+    original = Open3.method(:popen2e)
+    snapshot_path = nil
+    Open3.define_singleton_method(:popen2e) do |*args, **options|
+      snapshot_path = options.fetch(3).path
+      raise Errno::ENOENT, "test spawn failure"
+    end
+    run = run_script("echo unused")
+    assert_equal "failed", run.status
+    assert_includes run.log, "Could not start"
+    assert_not File.exist?(snapshot_path)
+  ensure
+    Open3.define_singleton_method(:popen2e, original) if original
+  end
+
+  test "concurrency limit rejects another launch without spawning it" do
+    old = Rails.configuration.x.max_concurrent_runs
+    Rails.configuration.x.max_concurrent_runs = 1
+    script = Script.create!(name: "limited", code: "sleep 30")
+    first = ScriptRunner.start(script)
+    second = ScriptRunner.start(script)
+    assert_equal "failed", second.reload.status
+    assert_includes second.log, "Maximum concurrent executions"
+    assert first.reload.running?
+  ensure
+    Rails.configuration.x.max_concurrent_runs = old
+  end
+
+  test "recovery does not signal a reused process identity" do
+    child = Process.spawn("sleep", "30", pgroup: true)
+    script = Script.create!(name: "reused", code: "echo unused")
+    run = script.runs.create!(started_at: Time.current, code_snapshot: "echo unused", pid: child,
+      server_pid: dead_pid, process_start_token: "incorrect-start-token")
+    ScriptRunner.recover_orphans!
+    assert_equal "failed", run.reload.status
+    assert alive?(child)
+    assert_includes run.termination_note, "Could not verify"
+  ensure
+    if child
+      Process.kill("KILL", child) rescue nil
+      Process.wait(child) rescue nil
+    end
+  end
+
+  def await_file(name)
+    Timeout.timeout(5) { sleep 0.02 until File.exist?(File.join(Rails.configuration.x.script_cwd, name)) }
+  end
+
   private
 
   def dead_pid

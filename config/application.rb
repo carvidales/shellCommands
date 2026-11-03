@@ -42,5 +42,11 @@ module ShellCommands
     # Where user scripts live and where they run from.
     config.x.scripts_dir = Rails.root.join("scripts")
     config.x.script_cwd = Dir.home
+    config.x.execution_timeout = Float(ENV.fetch("SCRIPT_TIMEOUT_SECONDS", "600"))
+    config.x.max_concurrent_runs = Integer(ENV.fetch("SCRIPT_MAX_CONCURRENT_RUNS", "8"))
+    raise "SCRIPT_MAX_CONCURRENT_RUNS must be positive" unless config.x.max_concurrent_runs.positive?
+    config.x.max_log_bytes = Integer(ENV.fetch("SCRIPT_MAX_LOG_BYTES", "5242880"))
+    raise "SCRIPT_TIMEOUT_SECONDS must be positive and finite" unless config.x.execution_timeout.positive? && config.x.execution_timeout.finite?
+    raise "SCRIPT_MAX_LOG_BYTES must be at least 1024" unless config.x.max_log_bytes >= 1024
   end
 end

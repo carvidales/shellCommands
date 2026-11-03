@@ -24,10 +24,9 @@ export default class extends Controller {
   watchStreamSource() {
     const source = document.querySelector("turbo-cable-stream-source")
     if (!source) return
-    if (source.hasAttribute("connected")) return this.resync()
+    if (source.hasAttribute("connected")) this.resync()
     this.sourceObserver = new MutationObserver(() => {
       if (source.hasAttribute("connected")) {
-        this.sourceObserver.disconnect()
         this.resync()
       }
     })
@@ -46,6 +45,10 @@ export default class extends Controller {
         } else if (start > this.lengthValue) {
           this.resync()
         } else {
+          if (start < this.lengthValue) {
+            node.textContent = Array.from(node.textContent).slice(this.lengthValue - start).join("")
+            node.dataset.start = this.lengthValue
+          }
           this.lengthValue = end
         }
       }
@@ -62,14 +65,19 @@ export default class extends Controller {
 
       // Keep chunks that arrived after the server read the log.
       const newer = [...this.logTarget.querySelectorAll("span[data-end]")]
-        .filter((span) => Number(span.dataset.start) >= length)
+        .filter((span) => Number(span.dataset.end) > length)
         .sort((a, b) => Number(a.dataset.start) - Number(b.dataset.start))
       this.logTarget.textContent = log
       let current = length
       for (const span of newer) {
-        if (Number(span.dataset.start) !== current) break
+        const start = Number(span.dataset.start)
+        const end = Number(span.dataset.end)
+        if (end <= current) continue
+        if (start > current) break
+        span.textContent = Array.from(span.textContent).slice(current - start).join("")
+        span.dataset.start = current
         this.logTarget.append(span)
-        current = Number(span.dataset.end)
+        current = end
       }
       this.lengthValue = current
 

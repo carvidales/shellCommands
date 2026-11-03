@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_02_214000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_150000) do
   create_table "runs", force: :cascade do |t|
     t.integer "script_id", null: false
     t.string "status", default: "running", null: false
@@ -25,6 +25,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_214000) do
     t.integer "server_pid"
     t.string "process_start_token"
     t.string "server_start_token"
+    t.text "termination_note"
     t.index ["script_id"], name: "index_runs_on_script_id"
   end
 
