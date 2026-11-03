@@ -1,6 +1,12 @@
 <% content_for :title, "New script" %>
 
-<p><%= link_to "← My scripts", root_path %></p>
-<h1>New script</h1>
+<%= link_to "← My scripts", root_path, class: "breadcrumb" %>
+<div class="page-header">
+  <div>
+    <span class="eyebrow">Create</span>
+    <h1>New script</h1>
+    <p class="page-subtitle">Save a command and make it available on your dashboard.</p>
+  </div>
+</div>
 
 <%= render "form", script: @script %>
