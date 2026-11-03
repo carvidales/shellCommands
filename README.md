@@ -10,7 +10,6 @@ read the logs of past runs.
 ## Run it
 
 ```bash
-sudo apt-get install imagemagick  # decoder for optional icon uploads
 bin/setup --skip-server   # install gems, prepare the database
 bin/rails server          # http://localhost:3000
 ```
@@ -123,8 +122,6 @@ control. After an abrupt server death, startup verifies recorded Linux process
 identities before signaling orphan groups. Legacy/unverifiable identities are
 marked failed without signaling. Linux `/proc` is required for execution.
 
-Icon uploads require ImageMagick (`sudo apt-get install imagemagick` on
-Ubuntu/WSL). PNG, JPEG, and WebP content is fully decoded with memory, dimension,
-and time limits, irrespective of the browser's claimed MIME type. Existing
-icons remain readable without a decoder; new uploads fail validation if it is
-unavailable. Images over 4096 pixels in either dimension are rejected.
+Icon uploads accept PNG, JPEG, and WebP files up to 1 MB. Validation checks
+file signatures and size without decoding the image or requiring external
+image tools. The server determines the response MIME type from the signature.

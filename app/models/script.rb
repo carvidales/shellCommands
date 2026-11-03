@@ -19,8 +19,8 @@ class Script < ApplicationRecord
     @icon_error = nil
     return if file.blank?
 
-    @icon_bytes = file.read(MAX_ICON_BYTES + 1)
-    @icon_error = "must be a PNG, JPEG, or WebP image under 1 MB" unless @icon_bytes.bytesize <= MAX_ICON_BYTES && self.class.icon_content_type(@icon_bytes) && decodable_icon?(@icon_bytes)
+    @icon_bytes = file.read(MAX_ICON_BYTES + 1).to_s
+    @icon_error = "must be a PNG, JPEG, or WebP image under 1 MB" unless @icon_bytes.bytesize <= MAX_ICON_BYTES && self.class.icon_content_type(@icon_bytes)
   rescue IOError, SystemCallError
     @icon_error = "could not be read"
   end
@@ -128,30 +128,6 @@ class Script < ApplicationRecord
   end
 
   private
-
-  # Force a whitelisted decoder and decode all pixels, with bounded resources.
-  # Filename, browser MIME type, and header signatures alone are insufficient.
-  def decodable_icon?(bytes)
-    format = { "image/png" => "png", "image/jpeg" => "jpeg", "image/webp" => "webp" }.fetch(self.class.icon_content_type(bytes))
-    Tempfile.create([ "script-icon-", ".image" ]) do |file|
-      file.binmode
-      file.write(bytes)
-      file.flush
-      MiniMagick.convert do |command|
-        command.limit "memory", "32MiB"
-        command.limit "map", "32MiB"
-        command.limit "disk", "0"
-        command.limit "width", "4096"
-        command.limit "height", "4096"
-        command.limit "time", "5"
-        command << "#{format}:#{file.path}"
-        command << "null:"
-      end
-    end
-    true
-  rescue MiniMagick::Error, MiniMagick::TimeoutError
-    false
-  end
 
   def icon_upload_is_valid
     errors.add(:icon_file, @icon_error) if @icon_error

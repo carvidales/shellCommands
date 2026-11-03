@@ -77,7 +77,7 @@ class ScriptIconsTest < ActionDispatch::IntegrationTest
     upload(PNG_BYTES) do |file|
       patch script_path(script), params: { script: { name: script.name, code: script.code, icon_file: file } }
     end
-    [ "\x89PNG\r\n\x1a\nnot-an-image".b, "\xff\xd8\xfftruncated".b, "RIFF0000WEBPtruncated".b, "<svg>unsafe</svg>", "x" * (Script::MAX_ICON_BYTES + 1) ].each do |invalid|
+    [ "", "not an image", "<svg>unsafe</svg>", PNG_BYTES + "x" * Script::MAX_ICON_BYTES ].each do |invalid|
       upload(invalid) do |file|
         patch script_path(script), params: { script: { name: script.name, code: script.code, icon_file: file } }
       end
@@ -98,8 +98,9 @@ class ScriptIconsTest < ActionDispatch::IntegrationTest
     assert_redirected_to root_path
     assert_not File.exist?(path)
   end
-  test "real JPEG and WebP images decode regardless of uploaded filename or MIME" do
-    script = Script.create!(name: "decoded_icons", code: "echo hi")
+
+  test "JPEG and WebP signatures determine MIME regardless of uploaded filename or MIME" do
+    script = Script.create!(name: "signature_icons", code: "echo hi")
     %w[jpg webp].each do |extension|
       bytes = File.binread(Rails.root.join("test/fixtures/files/icon.#{extension}"))
       upload(bytes, content_type: "text/plain") do |file|
@@ -111,6 +112,20 @@ class ScriptIconsTest < ActionDispatch::IntegrationTest
       assert_equal bytes, response.body.b
     end
   ensure
+    script&.destroy!
+  end
+
+  test "icon uploads do not require external image tools" do
+    original_path = ENV["PATH"]
+    script = Script.create!(name: "no_decoder", code: "echo hi")
+    ENV["PATH"] = ""
+    upload(PNG_BYTES) do |file|
+      patch script_path(script), params: { script: { icon_file: file } }
+    end
+    assert_redirected_to edit_script_path(script)
+    assert_equal PNG_BYTES, File.binread(script.icon_path)
+  ensure
+    ENV["PATH"] = original_path
     script&.destroy!
   end
 end
