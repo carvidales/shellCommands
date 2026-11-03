@@ -5,6 +5,9 @@
     <% end %>
     <div class="card-title"><%= script.name %></div>
   </div>
+  <% if (description = script.display_description).present? %>
+    <p class="card-description"><%= description %></p>
+  <% end %>
   <div class="card-meta">
     <% if script.file_missing? %>
       <span class="badge badge-missing">file missing</span>

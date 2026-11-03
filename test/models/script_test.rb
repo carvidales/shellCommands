@@ -94,4 +94,53 @@ class ScriptTest < ActiveSupport::TestCase
     assert_equal "echo new\n", File.read(script.path)
     assert_equal 0o755, File.stat(script.path).mode & 0o777
   end
+
+  test "description is stored below the shebang and preserves other metadata" do
+    source = "#!/bin/bash\n# @confirm=true\n# @param PORT=8000\necho \"$1\"\n"
+    script = Script.create!(name: "described", code: source, description: "Check a port")
+    assert_equal source.sub("#!/bin/bash\n", "#!/bin/bash\n# @description=Check a port\n"), File.read(script.path)
+    assert_equal "Check a port", Script.find(script.id).description
+    assert script.confirmation_required?
+    assert_equal "PORT", script.parameters.first[:name]
+  end
+
+  test "description can be updated and cleared without duplicating metadata" do
+    script = Script.create!(name: "described", code: "# @description=Old\necho hi\n")
+    script.update!(description: "New")
+    assert_equal "# @description=New\necho hi\n", File.read(script.path)
+    script.update!(description: "")
+    assert_equal "echo hi\n", File.read(script.path)
+    assert_nil script.description
+  end
+
+  test "description assignment order does not discard submitted code" do
+    script = Script.new(name: "ordered", description: "New", code: "echo latest\n")
+    script.save!
+    assert_equal "# @description=New\necho latest\n", File.read(script.path)
+    script.update!(code: "# @description=From code\necho edited\n")
+    assert_equal "From code", script.description
+  end
+
+  test "invalid descriptions cannot inject script lines or overwrite existing code" do
+    script = Script.create!(name: "safe_description", code: "echo original\n")
+    [ "x" * (Script::MAX_DESCRIPTION_LENGTH + 1), "one\necho injected", "one\recho injected", "one\u0000two" ].each do |description|
+      assert_not script.update(description: description)
+      assert script.errors[:description].any?
+      assert_equal "echo original\n", File.read(script.path)
+    end
+  end
+
+  test "description-only saves preserve a shebang without a newline" do
+    script = Script.create!(name: "shebang", code: "#!/bin/bash")
+    script.update!(description: "Hello")
+    assert_equal "#!/bin/bash\n# @description=Hello\n", File.read(script.path)
+  end
+
+  test "saving without a description field leaves legacy source unchanged" do
+    source = "#!/bin/bash\n# @description=Existing\necho hi\n"
+    script = Script.create!(name: "legacy_description", code: source)
+    script.update!(name: "renamed_description")
+    assert_equal source, File.read(script.path)
+    assert_equal "Existing", script.description
+  end
 end

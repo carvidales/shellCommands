@@ -42,3 +42,7 @@ this application, only use the service on localhost.
 with or without parameters and also applies to **Run again**. Tokens expire
 after 15 minutes and become invalid if the code changes. Duplicate or malformed
 reserved metadata is rejected at execution; ordinary Bash comments are unaffected.
+
+Descriptions also appear on dashboard cards. The optional **Description**
+field in the script editor manages this comment automatically, with a limit
+of 200 characters on one line. Clearing the field removes the comment.

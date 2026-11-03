@@ -5,6 +5,7 @@ class Script < ApplicationRecord
   PARAMETER_FORMAT = /\A# @param ([A-Za-z][A-Za-z0-9_]*)=([^\r\n]*)\z/
   MAX_PARAMETERS = 10
   MAX_ARGUMENT_BYTES = 1024
+  MAX_DESCRIPTION_LENGTH = 200
   class ParameterError < StandardError; end
 
   MAX_ICON_BYTES = 1.megabyte
@@ -39,10 +40,13 @@ class Script < ApplicationRecord
     format: { with: NAME_FORMAT, message: "can only contain letters, numbers, - and _" }
   validate :target_file_is_free, if: :writing_new_path?
   validate :icon_upload_is_valid
+  validate :description_is_valid
 
+  before_save :apply_description
   before_destroy :ensure_not_running, prepend: true
   after_save :write_file
   after_save :save_icon
+  after_save :clear_description_submission
   after_destroy_commit :delete_file
   after_destroy_commit :delete_icon
 
@@ -88,7 +92,19 @@ class Script < ApplicationRecord
     end == "true"
   end
 
-  def description = metadata_value("description")
+  def description
+    defined?(@description) ? @description : metadata_value("description")
+  end
+
+  def description=(value)
+    @description = value.to_s.strip
+  end
+
+  def display_description
+    description
+  rescue ParameterError
+    nil # Keep malformed metadata editable; execution still validates it.
+  end
 
   def execution_form?
     confirmation_required? || parameters.any?
@@ -128,6 +144,27 @@ class Script < ApplicationRecord
   end
 
   private
+
+  def description_is_valid
+    return unless defined?(@description)
+    errors.add(:description, "must be at most #{MAX_DESCRIPTION_LENGTH} characters") if @description.length > MAX_DESCRIPTION_LENGTH
+    errors.add(:description, "must be a single line without NUL characters") if @description.match?(/[\r\n\u0000]/)
+  end
+
+  def apply_description
+    return unless defined?(@description)
+    lines = code.lines.reject { |line| line.match?(/\A# @description(?:[=\s]|$)/) }
+    if @description.present?
+      position = lines.first&.start_with?("#!") ? 1 : 0
+      lines[0] += "\n" if position == 1 && !lines[0].end_with?("\n")
+      lines.insert(position, "# @description=#{@description}\n")
+    end
+    self.code = lines.join
+  end
+
+  def clear_description_submission
+    remove_instance_variable(:@description) if defined?(@description)
+  end
 
   def icon_upload_is_valid
     errors.add(:icon_file, @icon_error) if @icon_error
